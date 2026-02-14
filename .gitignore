@@ -19,8 +19,11 @@ wheels/
 .installed.cfg
 *.egg
 .env
+.env.local
 .venv
 env/
 venv/
 *.log
 .DS_Store
+logs/
+example_traces/
