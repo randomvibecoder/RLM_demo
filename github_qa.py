@@ -238,13 +238,13 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    # Test
-    rlm = create_rlm(max_iterations=3)
+    # Test with full Linux kernel repo (287MB+, feed 50MB)
+    rlm = create_rlm(max_iterations=10)  # More iterations!
     answer = ask_about_repo(
         "https://github.com/torvalds/linux",
         "How are drivers loaded in this codebase?",
         rlm,
-        max_context_size_mb=1,
+        max_context_size_mb=50,  # Feed 50MB of code!
     )
     print("\n" + "=" * 60)
     print("ANSWER:")
