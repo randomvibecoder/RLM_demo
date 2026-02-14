@@ -86,29 +86,74 @@ def create_rlm(
     )
 
 
-def clone_repo(repo_url: str, dest_dir: str = None) -> str:
-    """Clone a GitHub repository"""
+def clone_repo(repo_url: str, dest_dir: str = None, progress_callback=None) -> str:
+    """Clone a GitHub repository with progress reporting"""
     if dest_dir is None:
         dest_dir = tempfile.mkdtemp(prefix="rlm_repo_")
 
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
 
-    result = subprocess.run(
-        ["git", "clone", "--depth", "1", repo_url, dest_dir],
-        capture_output=True,
+    process = subprocess.Popen(
+        ["git", "clone", "--progress", "--depth", "1", repo_url, dest_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        timeout=300,
         env=env,
     )
 
-    if result.returncode != 0:
-        raise Exception(f"Failed to clone: {result.stderr}")
+    import re
+
+    last_pct = 0
+
+    for line in process.stdout:
+        if progress_callback:
+            # Parse git progress - various formats:
+            # "Counting objects:  12% (11803/98356)"
+            # "Compressing objects:   5% (4370/87388)"
+            # "Receiving objects:  12% (35000/290000), 25.00 MiB | 2.50 MiB/s"
+            # "Resolving deltas:  45% (1000/2200)"
+
+            if "Counting objects:" in line:
+                match = re.search(r"(\d+)%", line)
+                if match:
+                    last_pct = int(match.group(1))
+                    progress_callback(
+                        "clone", last_pct, f"Counting objects: {last_pct}%"
+                    )
+            elif "Compressing objects:" in line:
+                match = re.search(r"(\d+)%", line)
+                if match:
+                    last_pct = int(match.group(1))
+                    progress_callback(
+                        "clone", last_pct, f"Compressing objects: {last_pct}%"
+                    )
+            elif "Receiving objects:" in line:
+                match = re.search(r"(\d+)%", line)
+                if match:
+                    last_pct = int(match.group(1))
+                    progress_callback(
+                        "clone", last_pct, f"Receiving objects: {last_pct}%"
+                    )
+            elif "Resolving deltas:" in line:
+                match = re.search(r"(\d+)%", line)
+                if match:
+                    last_pct = int(match.group(1))
+                    progress_callback(
+                        "clone", last_pct, f"Resolving deltas: {last_pct}%"
+                    )
+
+    process.wait()
+
+    if process.returncode != 0:
+        raise Exception(f"Failed to clone")
 
     return dest_dir
 
 
-def read_files_recursive(directory: str, max_size_mb: int = 50) -> str:
+def read_files_recursive(
+    directory: str, max_size_mb: int = 50, progress_callback=None
+) -> str:
     """Read all files and concatenate with file markers"""
     max_bytes = max_size_mb * 1024 * 1024
     total_size = 0
@@ -156,19 +201,28 @@ def read_files_recursive(directory: str, max_size_mb: int = 50) -> str:
         "target",
     }
 
+    # First pass: count files (fast)
+    all_files = []
     for file_path in Path(directory).rglob("*"):
         if file_path.is_dir():
             if any(skip in file_path.parts for skip in skip_dirs):
                 continue
             continue
-
         if file_path.suffix not in extensions:
             continue
+        try:
+            if file_path.stat().st_size > 10 * 1024 * 1024:
+                continue
+        except:
+            continue
+        all_files.append(file_path)
 
+    total_files = len(all_files)
+    processed = 0
+
+    for file_path in all_files:
         try:
             file_size = file_path.stat().st_size
-            if file_size > 10 * 1024 * 1024:
-                continue
             if total_size + file_size > max_bytes:
                 break
         except:
@@ -181,6 +235,13 @@ def read_files_recursive(directory: str, max_size_mb: int = 50) -> str:
             rel_path = file_path.relative_to(directory)
             files_content.append(f"=== File: {rel_path} ===\n{content}\n")
             total_size += file_size
+            processed += 1
+
+            if progress_callback and total_files > 0:
+                pct = int((processed / total_files) * 100)
+                progress_callback(
+                    "read", pct, f"Reading files: {processed}/{total_files}"
+                )
         except:
             continue
 
