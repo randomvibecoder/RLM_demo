@@ -68,13 +68,19 @@ Use print() to examine the context.
 Use FINAL_ANSWER with source citations to return your final answer."""
 
 
-def create_rlm(max_iterations: int = 3, verbose: bool = True) -> RLM:
+def create_rlm(
+    max_iterations: int = 3, max_depth: int = 3, verbose: bool = True
+) -> RLM:
     """Create RLM instance with nano-gpt backend"""
     return RLM(
         backend="openai",
-        backend_kwargs={"model_name": "minimax/minimax-m2.5"},
+        backend_kwargs={"model_name": "minimax/minimax-m2.5-official"},
         environment="local",
         max_iterations=max_iterations,
+        max_depth=max_depth,  # Enable recursion!
+        # Sub-LM config - use same model
+        other_backends=["openai"],
+        other_backend_kwargs=[{"model_name": "minimax/minimax-m2.5-official"}],
         custom_system_prompt=CUSTOM_PROMPT,
         verbose=verbose,
     )
@@ -239,7 +245,9 @@ if __name__ == "__main__":
     load_dotenv()
 
     # Test with full Linux kernel repo (287MB+, feed 50MB)
-    rlm = create_rlm(max_iterations=10)  # More iterations!
+    rlm = create_rlm(
+        max_iterations=20, max_depth=3
+    )  # 20 iterations, 3 levels of recursion!
     answer = ask_about_repo(
         "https://github.com/torvalds/linux",
         "How are drivers loaded in this codebase?",

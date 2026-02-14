@@ -70,7 +70,7 @@ Use FINAL_ANSWER with source citations to return your final answer."""
 
 rlm = RLM(
     backend="openai",
-    backend_kwargs={"model_name": "minimax/minimax-m2.5"},
+    backend_kwargs={"model_name": "minimax/minimax-m2.5-official"},
     environment="local",
     max_iterations=3,
     verbose=True,
