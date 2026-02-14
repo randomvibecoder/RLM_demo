@@ -1,24 +1,22 @@
-# RLM Web UI
-# Install with: pip install fastapi uvicorn sse-starlette
-
+# RLM Web UI - Simple streaming version
 import os
 import json
 import asyncio
 import threading
-from queue import Queue, Empty
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 
 from github_qa import create_rlm, clone_repo, read_files_recursive
 from dotenv import load_dotenv
+import shutil
 
 load_dotenv()
 
 app = FastAPI(title="RLM GitHub QA")
 
-# Event queue for streaming
-event_queue = Queue()
+# In-memory storage for job results
+jobs = {}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -28,283 +26,161 @@ async def index():
 <head>
     <title>RLM GitHub QA</title>
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 900px; 
-            margin: 0 auto; 
-            padding: 20px;
-            background: #0d1117;
-            color: #c9d1d9;
-        }
+        body { font-family: 'Monaco', monospace; background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 900px; margin: 0 auto; }
         h1 { color: #58a6ff; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; color: #8b949e; }
-        input, textarea { 
-            width: 100%; 
-            padding: 10px; 
-            border-radius: 6px;
-            border: 1px solid #30363d;
-            background: #161b22;
-            color: #c9d1d9;
-            font-size: 14px;
-        }
-        textarea { height: 80px; resize: vertical; }
-        button {
-            background: #238636;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-        }
+        input, textarea { width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; margin-bottom: 10px; }
+        textarea { height: 60px; }
+        button { background: #238636; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; }
         button:hover { background: #2ea043; }
-        button:disabled { background: #30363d; cursor: not-allowed; }
-        #events {
-            margin-top: 20px;
-            background: #161b22;
-            border-radius: 8px;
-            padding: 15px;
-            min-height: 300px;
-            max-height: 500px;
-            overflow-y: auto;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-        }
-        .event { padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-        .event-start { background: #1f6feb; color: white; }
-        .event-iteration { background: #8957e5; color: white; }
-        .event-python { background: #da3633; color: white; }
-        .event-subllm { background: #f78166; color: white; }
-        .event-complete { background: #238636; color: white; }
-        .event-error { background: #da3633; color: white; }
+        #events { background: #161b22; padding: 15px; border-radius: 8px; min-height: 400px; max-height: 70vh; overflow-y: auto; margin-top: 20px; border: 1px solid #30363d; }
+        .event { padding: 4px 8px; margin: 2px 0; border-radius: 3px; }
         .event-info { background: #30363d; }
-        .event-stream { background: #21262d; border-left: 3px solid #58a6ff; }
-        .timestamp { color: #8b949e; font-size: 11px; }
-        .spinner {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 2px solid #8b949e;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .event-iter { background: #8957e5; color: white; }
+        .event-code { background: #da3633; color: white; }
+        .event-done { background: #238636; color: white; }
+        .event-error { background: #da3633; color: white; }
     </style>
 </head>
 <body>
     <h1>🔍 RLM GitHub QA</h1>
-    <p>Ask questions about any GitHub repository using Recursive Language Models</p>
-    
-    <div class="input-group">
-        <label>GitHub Repository URL</label>
-        <input type="text" id="repoUrl" placeholder="https://github.com/torvalds/linux" value="https://github.com/torvalds/linux">
-    </div>
-    
-    <div class="input-group">
-        <label>Question</label>
-        <textarea id="question" placeholder="How are drivers loaded in this codebase?">How are drivers loaded in this codebase?</textarea>
-    </div>
-    
-    <button id="runBtn" onclick="runRLM()">
-        <span class="spinner" id="spinner" style="display:none"></span>Run RLM
-    </button>
-    
-    <h3>Live Events</h3>
+    <input id="repo" value="https://github.com/torvalds/linux" placeholder="GitHub URL">
+    <textarea id="question">How are drivers loaded?</textarea>
+    <button onclick="run()">Run RLM</button>
     <div id="events"></div>
-    
     <script>
-        let eventSource = null;
+        let source = null;
         
-        function addEvent(type, data) {
-            const events = document.getElementById('events');
-            const div = document.createElement('div');
-            div.className = 'event event-' + type;
-            
-            let content = '';
-            const time = new Date().toLocaleTimeString();
-            
-            switch(type) {
-                case 'start':
-                    content = '🚀 <b>Starting RLM</b><br>Question: ' + data.question + '<br>Repo: ' + data.repo;
-                    break;
-                case 'info':
-                    content = 'ℹ️ ' + data.message;
-                    break;
-                case 'iteration':
-                    content = '📝 ' + data.line;
-                    break;
-                case 'stream':
-                    content = '<span class="timestamp">' + time + '</span> ' + escapeHtml(data.line);
-                    break;
-                case 'complete':
-                    content = '✅ <b>Final Answer</b><br>' + escapeHtml(data.answer.substring(0, 1000));
-                    if (data.answer.length > 1000) content += '...';
-                    break;
-                case 'error':
-                    content = '❌ <b>Error</b><br>' + escapeHtml(data.message);
-                    break;
-                default:
-                    content = escapeHtml(JSON.stringify(data));
-            }
-            
-            div.innerHTML = content;
-            events.appendChild(div);
-            events.scrollTop = events.scrollHeight;
+        function log(msg, type='info') {
+            const d = document.createElement('div');
+            d.className = 'event event-' + type;
+            d.textContent = msg;
+            document.getElementById('events').appendChild(d);
+            document.getElementById('events').scrollTop = 1e9;
         }
         
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        async function runRLM() {
-            const repoUrl = document.getElementById('repoUrl').value;
-            const question = document.getElementById('question').value;
-            const btn = document.getElementById('runBtn');
-            const spinner = document.getElementById('spinner');
-            const eventsDiv = document.getElementById('events');
+        function run() {
+            const repo = document.getElementById('repo').value;
+            const q = document.getElementById('question').value;
+            document.getElementById('events').innerHTML = '';
+            log('🚀 Starting...');
             
-            btn.disabled = true;
-            spinner.style.display = 'inline-block';
-            eventsDiv.innerHTML = '';
+            if (source) source.close();
+            source = new EventSource('/stream?repo=' + encodeURIComponent(repo) + '&q=' + encodeURIComponent(q));
             
-            if (eventSource) {
-                eventSource.close();
-            }
-            
-            const url = '/ask?repo=' + encodeURIComponent(repoUrl) + '&question=' + encodeURIComponent(question);
-            eventSource = new EventSource(url);
-            
-            eventSource.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-                addEvent(data.type, data.data);
+            source.onmessage = e => {
+                const d = JSON.parse(e.data);
+                if (d.type === 'iter') log('📝 Iteration ' + d.n, 'iter');
+                else if (d.type === 'code') log('🐍 ' + d.code.substring(0,80), 'code');
+                else if (d.type === 'done') log('✅ Done: ' + d.answer.substring(0,200), 'done');
+                else if (d.type === 'error') log('❌ ' + d.msg, 'error');
+                else log(d.msg);
             };
             
-            eventSource.onerror = function(e) {
-                console.log('Error:', e);
-                btn.disabled = false;
-                spinner.style.display = 'none';
-                eventSource.close();
-            };
-            
-            eventSource.addEventListener('done', function(e) {
-                btn.disabled = false;
-                spinner.style.display = 'none';
-            });
+            source.onerror = () => log('Connection closed');
         }
     </script>
 </body>
 </html>"""
 
 
-@app.get("/ask")
-async def ask(repo: str, question: str):
-    """Stream RLM events via SSE"""
+def run_rlm(job_id, repo, question):
+    """Run RLM in background thread"""
+    os.environ["OPENAI_API_KEY"] = os.getenv("NANO_GPT_API_KEY")
+    os.environ["OPENAI_BASE_URL"] = os.getenv(
+        "NANO_GPT_BASE_URL", "https://nano-gpt.com/api/v1"
+    )
 
-    async def event_generator():
-        os.environ["OPENAI_API_KEY"] = os.getenv("NANO_GPT_API_KEY")
-        os.environ["OPENAI_BASE_URL"] = os.getenv(
-            "NANO_GPT_BASE_URL", "https://nano-gpt.com/api/v1"
+    try:
+        jobs[job_id] = {"status": "cloning", "events": []}
+
+        repo_dir = clone_repo(repo)
+        context = read_files_recursive(repo_dir, max_size_mb=10)
+        shutil.rmtree(repo_dir, ignore_errors=True)
+
+        jobs[job_id]["status"] = "running"
+        jobs[job_id]["context_size"] = len(context)
+
+        rlm = create_rlm(max_iterations=5, max_depth=3, verbose=True)
+
+        # Run with custom handler to capture iterations
+        import sys
+        from io import StringIO
+
+        old = sys.stdout
+        sys.stdout = captured = StringIO()
+
+        result = rlm.completion(
+            prompt=context,
+            root_prompt=question + " - Cite sources with character positions.",
         )
 
-        # Send start event
-        yield json.dumps(
-            {"type": "start", "data": {"question": question, "repo": repo}}
-        )
+        sys.stdout = old
+        output = captured.getvalue()
 
-        try:
-            # Clone repo
-            yield json.dumps(
-                {"type": "info", "data": {"message": f"Cloning {repo}..."}}
-            )
+        # Parse iterations
+        import re
 
-            repo_dir = clone_repo(repo)
-            yield json.dumps({"type": "info", "data": {"message": "Reading files..."}})
+        for match in re.finditer(r"Iteration\s+(\d+)", output):
+            jobs[job_id]["events"].append({"type": "iter", "n": match.group(1)})
 
-            context = read_files_recursive(repo_dir, max_size_mb=10)
+        # Get answer
+        answer = str(result)
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["answer"] = answer
 
-            import shutil
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
 
-            shutil.rmtree(repo_dir, ignore_errors=True)
 
-            size_mb = len(context) / 1024 / 1024
-            yield json.dumps(
-                {
-                    "type": "info",
-                    "data": {"message": f"Context ready: {size_mb:.2f} MB"},
-                }
-            )
+@app.get("/stream")
+async def stream(repo: str, q: str):
+    import uuid
 
-            # Create RLM with verbose=True to capture output
-            rlm = create_rlm(max_iterations=5, max_depth=3, verbose=True)
+    job_id = str(uuid.uuid4())
 
-            yield json.dumps(
-                {"type": "info", "data": {"message": "Running RLM (5 iterations)..."}}
-            )
+    async def events():
+        # Start RLM in background
+        thread = threading.Thread(target=run_rlm, args=(job_id, repo, q))
+        thread.start()
 
-            # Run RLM - verbose=True prints to stdout
-            import io
-            import sys
+        # Stream events
+        seen_iters = set()
 
-            # Capture stdout in a thread-safe way
-            output_buffer = []
+        while True:
+            await asyncio.sleep(2)
 
-            # We'll run RLM in a separate thread and stream output
-            def run_rlm():
-                old_stdout = sys.stdout
-                sys.stdout = captured = io.StringIO()
-                try:
-                    result = rlm.completion(
-                        prompt=context,
-                        root_prompt=f"{question} - Cite your sources with character positions.",
-                    )
-                    output = captured.getvalue()
-                    output_buffer.append(("complete", str(result)))
-                except Exception as e:
-                    output_buffer.append(("error", str(e)))
-                finally:
-                    sys.stdout = old_stdout
+            job = jobs.get(job_id)
+            if not job:
+                yield "data: " + json.dumps({"msg": "Starting..."}) + "\n\n"
+                continue
 
-            # Run in thread so we can stream
-            thread = threading.Thread(target=run_rlm)
-            thread.start()
-
-            # Stream output as it comes
-            last_pos = 0
-            while thread.is_alive():
-                # Check for new output (this is a hacky way - verbose output goes to stdout)
-                await asyncio.sleep(2)
-                yield json.dumps(
-                    {
-                        "type": "info",
-                        "data": {"message": "Running... (this takes a few minutes)"},
-                    }
+            if job["status"] == "error":
+                yield (
+                    "data: "
+                    + json.dumps({"type": "error", "msg": job["error"]})
+                    + "\n\n"
                 )
+                break
 
-            thread.join()
+            # Send new iterations
+            for e in job.get("events", []):
+                if e["n"] not in seen_iters:
+                    seen_iters.add(e["n"])
+                    yield "data: " + json.dumps(e) + "\n\n"
 
-            # Send final result
-            if output_buffer:
-                etype, data = output_buffer[0]
-                if etype == "complete":
-                    yield json.dumps({"type": "complete", "data": {"answer": data}})
-                else:
-                    yield json.dumps({"type": "error", "data": {"message": data}})
+            if job["status"] == "done":
+                # Send final answer
+                answer = job.get("answer", "No answer")
+                # Truncate for display
+                if len(answer) > 500:
+                    answer = answer[:500] + "..."
+                yield "data: " + json.dumps({"type": "done", "answer": answer}) + "\n\n"
+                break
 
-        except Exception as e:
-            yield json.dumps({"type": "error", "data": {"message": str(e)}})
+        yield "data: " + json.dumps({"type": "done"}) + "\n\n"
 
-        yield json.dumps({"type": "done"})
-
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(events())
 
 
 if __name__ == "__main__":
