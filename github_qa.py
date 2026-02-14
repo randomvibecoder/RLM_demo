@@ -246,13 +246,13 @@ if __name__ == "__main__":
 
     # Test with full Linux kernel repo (287MB+, feed 50MB)
     rlm = create_rlm(
-        max_iterations=20, max_depth=3
-    )  # 20 iterations, 3 levels of recursion!
+        max_iterations=30, max_depth=3
+    )  # 30 iterations, 3 levels of recursion!
     answer = ask_about_repo(
         "https://github.com/torvalds/linux",
-        "How are drivers loaded in this codebase?",
+        "What programming languages are used in this codebase?",
         rlm,
-        max_context_size_mb=50,  # Feed 50MB of code!
+        max_context_size_mb=10,  # Smaller context for faster test
     )
     print("\n" + "=" * 60)
     print("ANSWER:")
