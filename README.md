@@ -13,6 +13,10 @@ RLMs allow LLMs to process arbitrarily long contexts (10M+ tokens) by:
 
 This implementation uses the official `rlm` package from alexzhang13/rlm.
 
+## Demo
+
+![RLM GitHub QA](screenshot.png)
+
 ## Setup
 
 ```bash
@@ -75,3 +79,13 @@ answer = ask_about_repo(
 - `github_qa.py` - Core RLM logic, repo cloning, file reading
 - `web_ui.py` - Flask web server with SSE streaming
 - Uses minimax/minimax-m2.5-official model for both root and sub-LLMs
+- `logs/` - Execution traces for debugging
+
+## How It Works
+
+1. **Clone** - Git clones the repo (with progress tracking)
+2. **Read** - Files are read and concatenated into context (up to 10MB)
+3. **Analyze** - RLM processes the context, can recursively call sub-LLMs on chunks
+4. **Answer** - Returns answer with source citations like `context[1000:2000]`
+
+The web UI supports multiple concurrent users with per-job queues and real-time SSE streaming.

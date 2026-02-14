@@ -91,54 +91,288 @@ HTML = """
 <html>
 <head>
     <title>RLM GitHub QA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 900px; margin: 0 auto; }
-        h1 { color: #58a6ff; }
-        input, textarea { width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; color: white; margin-bottom: 10px; }
-        textarea { height: 50px; }
-        button { background: #238636; color: white; border: none; padding: 10px 20px; cursor: pointer; }
-        button:disabled { background: #333; }
-        #log { background: #161b22; padding: 15px; margin-top: 20px; min-height: 400px; max-height: 70vh; overflow-y: auto; white-space: pre-wrap; border-radius: 8px; }
-        .msg { padding: 4px 8px; margin: 2px 0; border-radius: 4px; }
-        .start { background: #1f6feb; color: white; }
-        .info { background: #30363d; }
-        .iter { background: #8957e5; color: white; }
-        .done { background: #238636; color: white; }
-        .err { background: #da3633; color: white; }
-        .heartbeat { background: #1f6feb; color: white; }
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #131920;
+            --bg-tertiary: #1a2129;
+            --accent: #00d9ff;
+            --accent-dim: #00d9ff33;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --border: #30363d;
+            --success: #3fb950;
+            --error: #f85149;
+            --warning: #d29922;
+        }
         
-        #progress-container { display: none; margin-top: 10px; }
-        .progress-bar { height: 6px; background: #30363d; border-radius: 3px; overflow: hidden; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, #238636, #2ea043); width: 0%; transition: width 0.3s; }
-        .progress-text { font-size: 12px; color: #8b949e; margin-top: 4px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 6px; vertical-align: middle; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(ellipse at top, #00d9ff08 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, #3fb95005 0%, transparent 50%);
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 8px;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+        
+        .input-group {
+            margin-bottom: 16px;
+        }
+        
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+        
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--accent) 0%, #00a8cc 100%);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px var(--accent-dim);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--success));
+            width: 0%;
+            transition: width 0.3s ease-out;
+            border-radius: 4px;
+        }
+        
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        #log {
+            margin-top: 24px;
+        }
+        
+        .log-entry {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .log-start { background: #1f6feb22; border-left: 3px solid #1f6feb; color: #58a6ff; }
+        .log-info { background: var(--bg-tertiary); border-left: 3px solid var(--border); }
+        .log-iter { background: #8957e522; border-left: 3px solid #8957e5; }
+        .log-done { background: #23863622; border-left: 3px solid var(--success); }
+        .log-error { background: #da363322; border-left: 3px solid var(--error); }
+        
+        .answer-box {
+            background: linear-gradient(135deg, #23863611 0%, #00d9ff08 100%);
+            border: 1px solid var(--success);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 12px;
+            white-space: pre-wrap;
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--accent-dim);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--accent);
+        }
     </style>
 </head>
 <body>
-    <h1>RLM GitHub QA</h1>
-    <input id="repo" value="https://github.com/torvalds/linux">
-    <textarea id="q">How are drivers loaded?</textarea>
-    <button id="runBtn" onclick="run()">Run RLM</button>
-    <div id="progress-container">
-        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
-        <div id="progress-text" class="progress-text"></div>
+    <div class="container">
+        <header>
+            <div class="logo">🧠</div>
+            <h1>RLM GitHub QA</h1>
+            <p class="subtitle">Ask questions about any GitHub repository using Recursive Language Models</p>
+        </header>
+        
+        <div class="card">
+            <div class="input-group">
+                <label>Repository URL</label>
+                <input id="repo" type="text" value="https://github.com/torvalds/linux" placeholder="https://github.com/owner/repo">
+            </div>
+            <div class="input-group">
+                <label>Your Question</label>
+                <textarea id="q" placeholder="How are drivers loaded in this codebase?">How are drivers loaded?</textarea>
+            </div>
+            <button id="runBtn" class="btn" onclick="run()">
+                <span>✨</span> Ask Question
+            </button>
+            
+            <div id="progress-container">
+                <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+                <div class="progress-text">
+                    <div class="spinner"></div>
+                    <span id="progress-text-content">Initializing...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="log"></div>
     </div>
-    <div id="log"></div>
-    <script>
-    let heartbeatTimeout = null;
     
+    <script>
     function log(msg, type='info') {
         const d = document.getElementById('log');
-        d.innerHTML += '<div class="msg ' + type + '">' + msg + '</div>';
+        const entry = document.createElement('div');
+        entry.className = 'log-entry log-' + type;
+        
+        if (type === 'done' && msg.length > 100) {
+            entry.innerHTML = '<strong>✅ Answer:</strong><div class="answer-box">' + msg + '</div>';
+        } else {
+            entry.textContent = msg;
+        }
+        
+        d.appendChild(entry);
         d.scrollTop = d.scrollHeight;
     }
     
     function setProgress(pct, text) {
         const container = document.getElementById('progress-container');
         const fill = document.getElementById('progress-fill');
-        const txt = document.getElementById('progress-text');
+        const txt = document.getElementById('progress-text-content');
         container.style.display = 'block';
         if (pct !== null) fill.style.width = pct + '%';
         if (text) txt.textContent = text;
@@ -149,7 +383,7 @@ HTML = """
         document.getElementById('log').innerHTML = '';
         document.getElementById('progress-container').style.display = 'none';
         document.getElementById('progress-fill').style.width = '0%';
-        log('🚀 Starting...', 'start');
+        log('🚀 Starting analysis...', 'start');
         setProgress(0, 'Initializing...');
         
         const url = '/stream?repo=' + encodeURIComponent(document.getElementById('repo').value) + 
@@ -162,33 +396,29 @@ HTML = """
                 const d = JSON.parse(e.data);
                 if (d.type === 'start') log('🚀 ' + d.msg, 'start');
                 else if (d.type === 'info') log('ℹ️ ' + (d.msg || ''), 'info');
-                else if (d.type === 'progress') {
-                    setProgress(d.pct, d.msg);
-                }
-                else if (d.type === 'heartbeat') {
-                    setProgress(null, d.msg);
-                }
+                else if (d.type === 'progress') setProgress(d.pct, d.msg);
+                else if (d.type === 'heartbeat') setProgress(null, d.msg);
                 else if (d.type === 'iter') log('📝 Iteration ' + d.n, 'iter');
                 else if (d.type === 'done') {
                     document.getElementById('progress-container').style.display = 'none';
-                    log('✅ Done!', 'done');
-                    log(d.answer.substring(0, 3000), 'done');
+                    log('✅ Analysis Complete!', 'done');
+                    log(d.answer.substring(0, 5000), 'done');
                     document.getElementById('runBtn').disabled = false;
                     es.close();
                 }
                 else if (d.type === 'error') {
                     document.getElementById('progress-container').style.display = 'none';
-                    log('❌ ' + d.msg, 'err');
+                    log('❌ Error: ' + d.msg, 'error');
                     document.getElementById('runBtn').disabled = false;
                     es.close();
                 }
             } catch(err) {
-                log('Error: ' + e.data);
+                log('Error: ' + e.data, 'error');
             }
         };
         
         es.onerror = function() {
-            log('Connection closed', 'err');
+            log('❌ Connection closed', 'error');
             document.getElementById('runBtn').disabled = false;
         };
     }
