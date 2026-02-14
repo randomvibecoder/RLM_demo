@@ -25,5 +25,3 @@ env/
 venv/
 *.log
 .DS_Store
-logs/
-example_traces/
