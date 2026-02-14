@@ -272,7 +272,6 @@ Start by examining the context!""",
             # Check for FINAL_VAR - can be FINAL_VAR("answer") or FINAL_VAR(variable_name)
             final_match = re.search(r'FINAL_VAR\(["\']([^"\']+)["\']\)', response)
             if final_match:
-                # String literal means direct answer
                 answer = final_match.group(1)
                 logger.info(f"FINAL_VAR with string: {answer}")
                 return answer
@@ -282,6 +281,16 @@ Start by examining the context!""",
                 var_name = final_match.group(1)
                 code = f"print({var_name})"
                 result = execute_code(code, context, None)
+                if result.startswith("ERROR:"):
+                    # Variable not defined, try to extract answer from response text
+                    logger.warning(
+                        f"Variable {var_name} not defined, using response text"
+                    )
+                    # Remove code blocks and extract answer
+                    text = re.sub(r"```.*?```", "", response, flags=re.DOTALL)
+                    text = text.strip()
+                    if text:
+                        return text
                 logger.info(f"FINAL_VAR({var_name}) = {result[:200]}")
                 return result
 
