@@ -1,0 +1,12 @@
+{
+  "question": "What arithmetic trick in calc_delta_fair() avoids division? Explain WMULT_SHIFT and reciprocal multiplication.",
+  "file": "kernel/sched/fair.c",
+  "iterations": [
+    {
+      "iteration": 1,
+      "type": "direct",
+      "response": "The arithmetic trick in `calc_delta_fair()` avoids division by using **reciprocal multiplication** with a precomputed inverse weight and a bit-shift operation. Instead of performing an expensive division by `lw->weight`, the function multiplies by the reciprocal `lw->inv_weight` and shifts right by `WMULT_SHIFT` bits, achieving the same result more efficiently.\n\n### Explanation of WMULT_SHIFT and Reciprocal Multiplication\n\n- **WMULT_SHIFT**: This is a constant (typically 32) defined elsewhere in the kernel. It represents the number of bits by which the product is shifted to scale the reciprocal multiplication back to the original magnitude. The reciprocal `inv_weight` is precomputed as \\( 2^{\\text{WMULT\\_SHIFT}} / \\text{weight} \\), allowing division to be replaced by multiplication and a shift.\n\n- **Reciprocal Multiplication**: The idea is to compute \\( \\text{delta} \\times \\frac{\\text{weight}}{\\text{lw.weight}} \\) without actual division. Instead, it calculates \\( (\\text{delta} \\times "
+    }
+  ],
+  "final_answer": "The trick uses reciprocal multiplication: \\( \\text{delta} \\times \\text{weight} / \\text{lw.weight} \\) is computed as \\( (\\text{delta} \\times \\text{weight} \\times \\text{lw->inv\\_weight}) \\gg \\text{WMULT\\_SHIFT} \\), avoiding division. WMULT_SHIFT is the shift (typically 32) used to scale the reciprocal multiplication, and `inv_weight` is the precomputed reciprocal of the weight."
+}
