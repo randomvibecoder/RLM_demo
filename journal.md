@@ -123,3 +123,25 @@ This is implemented in `__calc_delta()` which is called from `calc_delta_fair()`
 ### Files Added:
 - example_traces/ (5 JSON files)
 - generate_traces.py (script to generate traces)
+
+## Entry 10: Feb 15, 2026 - Full RLM Traces Generated
+
+### What Happened:
+1. Created generate_full_trace.py - RLM that saves detailed iteration traces
+2. Generated traces showing each RLM iteration with:
+   - Model output
+   - Code executed
+   - Code output
+
+### Traces Generated:
+- calc_delta_fair_full_trace.json - Full iteration trace (5 iterations)
+- calc_delta_fair_rlm_trace.json
+- vruntime_rlm_trace.json
+- sched_entity_rlm_trace.json
+- scale_load_rlm_trace.json
+- update_load_set_rlm_trace.json
+
+### Notes:
+- The trace shows the model exploring the code step by step
+- Each iteration shows: what code was written, what was executed, what output was returned
+- This is the actual RLM "thinking process"
