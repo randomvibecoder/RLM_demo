@@ -1,0 +1,12 @@
+{
+  "question": "How is sched_slice calculated? What factors affect it?",
+  "iterations": [
+    {
+      "iteration": 5,
+      "type": "code",
+      "code": "for i, line in enumerate(CONTEXT_LINES):\n    if 'sched_slice' in line.lower():\n        print(f\"Line {i}: {line}\")\nfor i, line in enumerate(CONTEXT_LINES):\n    if 'sched_slice' in line.lower():\n       ",
+      "output": "ERROR: expected ':' (<string>, line 7)"
+    }
+  ],
+  "final_answer": "[No answer found]"
+}

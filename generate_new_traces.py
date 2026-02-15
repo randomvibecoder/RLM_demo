@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate multiple RLM traces with different questions"""
+"""Generate 5 new RLM traces with improved prompts"""
 
 import os
 import json
@@ -58,7 +58,12 @@ class REPLEnvironment:
             sys.stdout = out
             exec(
                 code,
-                {"CONTEXT": self.context, "CONTEXT_LINES": self.lines, "print": print},
+                {
+                    "CONTEXT": self.context,
+                    "CONTEXT_LINES": self.lines,
+                    "print": print,
+                    "len": len,
+                },
             )
             sys.stdout = old
         except Exception as e:
@@ -66,24 +71,25 @@ class REPLEnvironment:
         return out.getvalue() or "[No output]"
 
 
-def generate_trace(question, context_lines, output_file, prompt_suffix=""):
-    """Generate a single trace"""
+def generate_trace(question, context_lines, output_file):
+    """Generate a single trace with improved prompting"""
 
     client = NanoGPTClient()
     repl = REPLEnvironment(context_lines)
 
     trace = {"question": question, "iterations": [], "final_answer": ""}
 
-    system_prompt = """You are an RLM analyzing Linux kernel code. Write Python code to analyze CONTEXT_LINES.
+    system_prompt = """You are analyzing Linux kernel source code. 
 
-IMPORTANT: 
-- Only write Python code using for loops and print() statements
-- Do NOT use any tool calls
-- When you have the answer, say FINAL_ANSWER: <your answer>"""
+IMPORTANT instructions:
+1. First write and execute Python code to search CONTEXT_LINES for relevant code
+2. Use for loops: for i, line in enumerate(CONTEXT_LINES): if 'keyword' in line: print(f"Line {i}: {line}")
+3. After seeing the code output, provide your answer
+4. When you have the answer, say FINAL_ANSWER: <your answer with citations>"""
 
     user_prompt = f"""Question: {question}
 
-Search CONTEXT_LINES for relevant code. {prompt_suffix}"""
+Context (CONTEXT_LINES) is provided. Search it to find the answer. Write Python code first."""
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -97,27 +103,26 @@ Search CONTEXT_LINES for relevant code. {prompt_suffix}"""
         if "FINAL_ANSWER:" in resp:
             trace["final_answer"] = resp.split("FINAL_ANSWER:")[-1].strip()
             trace["iterations"].append(
-                {"iteration": i + 1, "type": "final", "output": resp[:300]}
+                {"iteration": i + 1, "type": "final", "output": resp[:400]}
             )
             break
 
-        # Extract Python code - only look for ```python blocks
+        # Extract Python code
         code = None
 
-        # Try ```python first
+        # Try ```python block
         if "```python" in resp:
             start = resp.find("```python") + 9
             end = resp.find("```", start)
             if end > start:
                 code = resp[start:end].strip()
 
-        # If no ```python, look for lines starting with Python keywords
+        # If no ```python, look for Python keywords
         if not code:
             lines = resp.split("\n")
             code_lines = []
             for line in lines:
                 stripped = line.strip()
-                # Only pick lines that look like actual Python code
                 if any(
                     stripped.startswith(kw)
                     for kw in [
@@ -150,56 +155,58 @@ Search CONTEXT_LINES for relevant code. {prompt_suffix}"""
             )
             messages.append({"role": "assistant", "content": resp})
             messages.append(
-                {"role": "user", "content": f"Output: {out[:500]}. Now FINAL_ANSWER:"}
+                {
+                    "role": "user",
+                    "content": f"Code output:\n{out[:500]}\n\nNow provide FINAL_ANSWER:",
+                }
             )
 
     if not trace["final_answer"]:
-        trace["final_answer"] = "[Exploration complete but no final answer]"
+        trace["final_answer"] = "[No answer found]"
 
     with open(f"example_traces/{output_file}", "w") as f:
         json.dump(trace, f, indent=2)
 
-    print(f"Saved: {output_file}")
+    print(f"Saved: {output_file} - Answer: {trace['final_answer'][:80]}...")
 
 
 def main():
-    # Load fair.c
     with open("linux/kernel/sched/fair.c") as f:
         context = f.read()
 
     lines = context.split("\n")
 
-    # Generate 5 traces
+    # 5 new questions
     traces = [
         (
-            "calc_delta_fair_trick",
-            "What arithmetic trick in calc_delta_fair() avoids division? Cite lines.",
-            "\n".join(lines[195:350]),
-            "calc_delta_fair_rlm_trace.json",
+            "__calc_delta_analysis",
+            "Explain __calc_delta function in detail - how does it use WMULT_SHIFT?",
+            "\n".join(lines[245:290]),
+            "calc_delta_detail_trace.json",
         ),
         (
-            "vruntime",
-            "What is vruntime in CFS? Cite the code.",
-            "\n".join(lines[0:100]),
-            "vruntime_rlm_trace.json",
+            "entity_cfs_rq",
+            "What is entity_cfs_rq and how does it update vruntime?",
+            "\n".join(lines[1200:1250]),
+            "entity_update_trace.json",
         ),
         (
-            "sched_entity",
-            "What is struct sched_entity? Find its definition.",
-            "\n".join(lines[0:200]),
-            "sched_entity_rlm_trace.json",
+            "min_vruntime",
+            "What does min_vruntime function do? Find and explain it.",
+            "\n".join(lines[850:920]),
+            "min_vruntime_trace.json",
         ),
         (
-            "update_load_set",
-            "What does update_load_set do? Find and explain.",
-            "\n".join(lines[13600:13750]),
-            "update_load_set_rlm_trace.json",
+            "niced_weight",
+            "What is the relationship between nice value and weight in CFS?",
+            "\n".join(lines[195:260]),
+            "nice_weight_trace.json",
         ),
         (
-            "scale_load_down",
-            "What does scale_load_down do? Find and explain.",
-            "\n".join(lines[100:200]),
-            "scale_load_rlm_trace.json",
+            "sched_slice_calc",
+            "How is sched_slice calculated? What factors affect it?",
+            "\n".join(lines[700:760]),
+            "sched_slice_trace.json",
         ),
     ]
 
