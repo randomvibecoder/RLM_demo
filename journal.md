@@ -89,3 +89,19 @@ This is implemented in `__calc_delta()` which is called from `calc_delta_fair()`
 1. Cleaned up gitignore to exclude linux/, .env, images, pycache
 2. Committed to rlm-demo remote (private repo)
 3. Files committed: .gitignore, journal.md, rlm_minimax.py, rlm_simple.py, requirements.txt, .env.example, README.md, github_qa.py, web_ui.py
+
+## Entry 8: Feb 15, 2026 - Full RLM with Chunking Works!
+
+### What Happened:
+1. Created rlm_full.py - chunk-based RLM that doesn't require model to write Python code
+2. Instead, it splits context into chunks and uses root/sub LM pattern
+3. Successfully got answer about calc_delta_fair arithmetic trick
+
+### The Chunk-Based Approach:
+- Splits context into ~500 line chunks
+- Root model identifies which chunks are relevant
+- Sub model analyzes each relevant chunk
+- Root model synthesizes final answer
+
+### Files Added:
+- rlm_full.py - Full RLM with chunk-based sub-calls
