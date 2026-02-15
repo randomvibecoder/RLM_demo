@@ -105,3 +105,21 @@ This is implemented in `__calc_delta()` which is called from `calc_delta_fair()`
 
 ### Files Added:
 - rlm_full.py - Full RLM with chunk-based sub-calls
+
+## Entry 9: Feb 15, 2026 - Example Traces Generated
+
+### What Happened:
+1. Made repo public (gh repo edit --visibility public)
+2. Created example_traces/ folder with 5 JSON traces
+3. Generated traces for questions about Linux kernel CFS scheduler
+
+### Traces Generated:
+1. calc_delta_fair_trick.json - Division avoidance trick
+2. vruntime_explanation.json - Virtual runtime explanation
+3. entity_weight.json - Entity weights and load
+4. sched_slice.json - sched_slice calculation
+5. update_curr_explanation.json - update_curr() function
+
+### Files Added:
+- example_traces/ (5 JSON files)
+- generate_traces.py (script to generate traces)
