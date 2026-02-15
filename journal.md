@@ -61,3 +61,31 @@
 ### Next Steps:
 - Fix the simplified RLM to get answer
 - Commit working code to GitHub
+
+## Entry 6: Feb 15, 2026 - SUCCESS! RLM Answer Received
+
+### What Happened:
+1. Ran rlm_simple.py successfully
+2. Got detailed answer about calc_delta_fair() arithmetic trick
+3. Pushed to private repo https://github.com/randomvibecoder/RLM_demo
+
+### The Answer:
+The CFS scheduler uses **reciprocal multiplication** to avoid division:
+- Instead of: `delta_exec * weight / lw->weight`
+- Uses: `(delta_exec * weight * inv_weight) >> WMULT_SHIFT`
+- Where `WMULT_SHIFT = 32` and `WMULT_CONST = 2^32 - 1`
+- `inv_weight = WMULT_CONST / weight` is pre-computed once
+
+This is implemented in `__calc_delta()` which is called from `calc_delta_fair()`.
+
+### Full RLM Status:
+- The full RLM (rlm_minimax.py) has the architecture but minimax model doesn't follow the code execution paradigm
+- The model keeps outputting tool-like invocations instead of actual Python code
+- Simplified version works by sending relevant code directly to the model
+
+## Entry 7: Feb 15, 2026 - Files Committed
+
+### What Happened:
+1. Cleaned up gitignore to exclude linux/, .env, images, pycache
+2. Committed to rlm-demo remote (private repo)
+3. Files committed: .gitignore, journal.md, rlm_minimax.py, rlm_simple.py, requirements.txt, .env.example, README.md, github_qa.py, web_ui.py
