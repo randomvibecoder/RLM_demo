@@ -24,8 +24,8 @@ def run_rlm_job(job_id, repo, question):
     """Run RLM - runs in thread, pushes events to queue"""
     queue = jobs[job_id]["queue"]
 
-    def event_callback(event_type, pct=None, msg=None):
-        queue.put({"type": event_type, "pct": pct, "msg": msg})
+    def event_callback(event_type, pct=None, msg=None, data=None):
+        queue.put({"type": event_type, "pct": pct, "msg": msg, "data": data})
 
     try:
         os.environ["OPENAI_API_KEY"] = os.getenv("NANO_GPT_API_KEY") or ""
@@ -55,6 +55,14 @@ def run_rlm_job(job_id, repo, question):
 
         rlm = create_rlm(max_iterations=3, max_depth=1, verbose=False)
 
+        # Send the full prompt to the UI
+        from github_qa import CUSTOM_PROMPT
+
+        full_prompt = f"System: {CUSTOM_PROMPT}\n\nUser: {question}"
+        event_callback(
+            "prompt", None, "Full prompt:", data={"prompt": full_prompt[:2000]}
+        )
+
         # Start heartbeat for RLM
         phrases = [
             "🤔 Thinking",
@@ -78,8 +86,23 @@ def run_rlm_job(job_id, repo, question):
 
         result = rlm.completion(prompt=context, root_prompt=question)
 
+        # Get full result info
+        try:
+            result_dict = result.to_dict()
+            answer = str(result)
+            # Send iterations info
+            if "iterations" in result_dict:
+                event_callback(
+                    "iterations",
+                    None,
+                    f"RLM iterations: {len(result_dict.get('iterations', []))}",
+                    data={"iterations": result_dict.get("iterations", [])},
+                )
+        except:
+            answer = str(result)
+
         jobs[job_id]["status"] = "done"
-        queue.put({"type": "done", "answer": str(result)})
+        queue.put({"type": "done", "answer": answer})
 
     except Exception as e:
         jobs[job_id]["status"] = "error"
@@ -296,6 +319,8 @@ HTML = """
         .log-iter { background: #8957e522; border-left: 3px solid #8957e5; }
         .log-done { background: #23863622; border-left: 3px solid var(--success); }
         .log-error { background: #da363322; border-left: 3px solid var(--error); }
+        .log-prompt { background: #00d9ff11; border-left: 3px solid var(--accent); }
+        .log-iterations { background: #8957e522; border-left: 3px solid #8957e5; }
         
         .answer-box {
             background: linear-gradient(135deg, #23863611 0%, #00d9ff08 100%);
@@ -306,6 +331,31 @@ HTML = """
             white-space: pre-wrap;
             line-height: 1.7;
             color: var(--text-primary);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .prompt-box {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 8px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            color: var(--text-secondary);
+        }
+        
+        .iteration-box {
+            background: #8957e511;
+            border: 1px solid #8957e5;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 8px;
+            max-height: 300px;
+            overflow-y: auto;
         }
         
         .status-badge {
@@ -354,13 +404,25 @@ HTML = """
     </div>
     
     <script>
-    function log(msg, type='info') {
+    function log(msg, type='info', data=null) {
         const d = document.getElementById('log');
         const entry = document.createElement('div');
         entry.className = 'log-entry log-' + type;
         
         if (type === 'done' && msg.length > 100) {
             entry.innerHTML = '<strong>✅ Answer:</strong><div class="answer-box">' + msg + '</div>';
+        } else if (type === 'prompt' && data && data.prompt) {
+            entry.innerHTML = '<strong>📋 Full Prompt to Kappa:</strong><div class="prompt-box">' + data.prompt + '</div>';
+        } else if (type === 'iterations' && data && data.iterations) {
+            let iterHtml = '<strong>🔄 RLM Iterations (' + data.iterations.length + '):</strong><div class="iteration-box">';
+            data.iterations.forEach((iter, i) => {
+                iterHtml += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #8957e555;">';
+                iterHtml += '<strong>Iteration ' + (i+1) + ':</strong><br>';
+                if (iter.response) iterHtml += '<pre style="white-space:pre-wrap;max-height:150px;overflow-y:auto;">' + iter.response.substring(0, 1000) + '</pre>';
+                iterHtml += '</div>';
+            });
+            iterHtml += '</div>';
+            entry.innerHTML = iterHtml;
         } else {
             entry.textContent = msg;
         }
@@ -398,6 +460,8 @@ HTML = """
                 else if (d.type === 'info') log('ℹ️ ' + (d.msg || ''), 'info');
                 else if (d.type === 'progress') setProgress(d.pct, d.msg);
                 else if (d.type === 'heartbeat') setProgress(null, d.msg);
+                else if (d.type === 'prompt') log(d.msg, 'prompt', d.data);
+                else if (d.type === 'iterations') log(d.msg, 'iterations', d.data);
                 else if (d.type === 'iter') log('📝 Iteration ' + d.n, 'iter');
                 else if (d.type === 'done') {
                     document.getElementById('progress-container').style.display = 'none';
